@@ -1,4 +1,4 @@
-export const BETTING_CONTRACT_ADDRESS = "0x95bd8d42f30351685e96c62eddc0d0613bf9a87a"
+export const BETTING_CONTRACT_ADDRESS = "0x700b6a60ce7eaaea56f065753d8dcb9653dbad35"
 
 export const DESTINATION_CHAIN_ID = 902
 
@@ -223,8 +223,14 @@ export const BETTING_CONTRACT_ABI = [
     },
     {
       "type": "function",
-      "name": "getActiveBets",
-      "inputs": [],
+      "name": "getAllUserBets",
+      "inputs": [
+        {
+          "name": "user",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
       "outputs": [
         {
           "name": "",
@@ -293,14 +299,8 @@ export const BETTING_CONTRACT_ABI = [
     },
     {
       "type": "function",
-      "name": "getActiveUserBets",
-      "inputs": [
-        {
-          "name": "user",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
+      "name": "getActiveBets",
+      "inputs": [],
       "outputs": [
         {
           "name": "",
@@ -684,6 +684,11 @@ export const BETTING_CONTRACT_ABI = [
           "name": "winner",
           "type": "address",
           "internalType": "address"
+        },
+        {
+          "name": "resolver",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "outputs": [],
@@ -778,6 +783,12 @@ export const BETTING_CONTRACT_ABI = [
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
+        },
+        {
+          "name": "status",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum WagerBet.BetStatus"
         }
       ],
       "anonymous": false

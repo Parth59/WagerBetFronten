@@ -112,22 +112,6 @@ export default function CreateBet() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <header className="px-4 lg:px-6 h-16 flex items-center border-b">
-        <Link className="flex items-center justify-center" href="/">
-          <span className="text-xl font-bold">BetChain</span>
-        </Link>
-        <nav className="ml-auto flex gap-4 sm:gap-6">
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/">
-            Home
-          </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/explore">
-            Explore
-          </Link>
-          <Link className="text-sm font-medium hover:underline underline-offset-4" href="/dashboard">
-            Dashboard
-          </Link>
-        </nav>
-      </header>
       <main className="flex-1 py-6 md:py-12">
         <div className="container px-4 md:px-6 max-w-3xl">
           <div className="flex items-center mb-6">

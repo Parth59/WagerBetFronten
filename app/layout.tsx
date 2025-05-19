@@ -6,13 +6,13 @@ import { Inter } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { WalletProvider } from "@/contexts/wallet-context"
+import { Header } from "@/components/header"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "BetChain - Web3 Betting Platform",
-  description: "A decentralized platform for peer-to-peer betting secured by blockchain technology",
-    generator: 'v0.dev'
+  title: "BetChain",
+  description: "Decentralized betting platform",
 }
 
 export default function RootLayout({
@@ -30,8 +30,11 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <WalletProvider>
-            {children}
-            <Toaster />
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              {children}
+              <Toaster />
+            </div>
           </WalletProvider>
         </ThemeProvider>
       </body>

@@ -13,8 +13,18 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
 
-export default function ExploreBets() {
+export default function ResolveBets() {
   const { toast } = useToast()
   const { account } = useWallet()
   const [searchQuery, setSearchQuery] = useState("")
@@ -22,6 +32,9 @@ export default function ExploreBets() {
   const [bets, setBets] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedBet, setSelectedBet] = useState<any>(null)
+  const [showWinnerDialog, setShowWinnerDialog] = useState(false)
+  const [selectedWinner, setSelectedWinner] = useState<string>("")
 
   useEffect(() => {
     let retryCount = 0;
@@ -50,7 +63,7 @@ export default function ExploreBets() {
         
         // Transform the blockchain data into our UI format
         const formattedBets = activeBets
-          .filter((bet: any) => Number(bet.status) === 0) // Only show Open bets
+          .filter((bet: any) => Number(bet.status) === 1) // Only show Joined bets
           .map((bet: any) => ({
             title: bet.description.split(" - ")[0] || bet.description,
             description: bet.description,
@@ -61,10 +74,10 @@ export default function ExploreBets() {
             takers: bet.joiner !== ethers.ZeroAddress ? 1 : 0,
             id: bet.id,
             creator: bet.creator,
+            joiner: bet.joiner,
             resolver: bet.resolver,
             status: getBetStatus(Number(bet.status))
           }))
-        console.log(formattedBets);
 
         setBets(formattedBets)
         setError(null)
@@ -102,18 +115,34 @@ export default function ExploreBets() {
       bet.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       bet.description.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = category === "all" || bet.category.toLowerCase() === category.toLowerCase()
-    return matchesSearch && matchesCategory 
+    return matchesSearch && matchesCategory
   })
 
-  const handleTakeBet = async (bet: any) => {
+  const handleResolveClick = (bet: any) => {
     if (!account) {
       toast({
         title: "Wallet not connected",
-        description: "Please connect your wallet to take a bet",
+        description: "Please connect your wallet to resolve the bet",
         variant: "destructive"
       })
       return
     }
+
+    if (account.toLowerCase() !== bet.resolver.toLowerCase()) {
+      toast({
+        title: "Not authorized",
+        description: "Only the designated resolver can resolve this bet",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setSelectedBet(bet)
+    setShowWinnerDialog(true)
+  }
+
+  const handleResolveBet = async () => {
+    if (!selectedBet || !selectedWinner) return
 
     try {
       if (!window.ethereum) {
@@ -128,33 +157,30 @@ export default function ExploreBets() {
         signer
       )
 
-      const stakeInWei = ethers.parseEther(bet.amount.toString())
-      alert(bet.id);
-      alert(stakeInWei);
-      alert(bet.creator);
-      const tx = await contract.joinBet(
+      const tx = await contract.resolveBet(
         DESTINATION_CHAIN_ID,
-        bet.id,
-        bet.creator,
-        account,
-        stakeInWei,
-        { value: stakeInWei } // Send the same amount as msg.value
+        selectedBet.id,
+        selectedWinner
       )
 
-      await tx.wait()
-
       toast({
-        title: "Bet taken successfully",
-        description: "You have successfully joined the bet",
+        title: "Transaction sent",
+        description: "Redirecting to dashboard...",
       })
 
-      // Refresh the bets list
-      window.location.reload()
+      // Close dialog and redirect immediately
+      setShowWinnerDialog(false)
+      setSelectedBet(null)
+      setSelectedWinner("")
+      
+      // Redirect to dashboard
+      window.location.href = "/dashboard"
+
     } catch (error: any) {
-      console.error("Error taking bet:", error)
+      console.error("Error resolving bet:", error)
       toast({
-        title: "Error taking bet",
-        description: error.message || "Failed to take bet",
+        title: "Error resolving bet",
+        description: error.message || "Failed to resolve bet",
         variant: "destructive"
       })
     }
@@ -177,6 +203,7 @@ export default function ExploreBets() {
   if (error) {
     return (
       <div className="flex flex-col min-h-screen">
+
         <main className="flex-1 py-6 md:py-12">
           <div className="container px-4 md:px-6">
             <div className="flex items-center justify-center h-[50vh]">
@@ -190,16 +217,14 @@ export default function ExploreBets() {
 
   return (
     <div className="flex flex-col min-h-screen">
+
       <main className="flex-1 py-6 md:py-12">
         <div className="container px-4 md:px-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Explore Bets</h1>
-              <p className="text-muted-foreground">Browse and take bets from other users</p>
+              <h1 className="text-3xl font-bold tracking-tight">Bets to resolve</h1>
+              <p className="text-muted-foreground">Resolve bets that have been joined</p>
             </div>
-            <Button asChild>
-              <Link href="/create-bet">Create Your Own Bet</Link>
-            </Button>
           </div>
 
           <div className="grid gap-6">
@@ -233,8 +258,8 @@ export default function ExploreBets() {
 
             {filteredBets.length === 0 ? (
               <div className="text-center py-12">
-                <h3 className="text-lg font-medium">No bets found</h3>
-                <p className="text-muted-foreground mt-1">Try adjusting your search or filter criteria</p>
+                <h3 className="text-lg font-medium">No bets to resolve</h3>
+                <p className="text-muted-foreground mt-1">There are no joined bets that need resolution</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -246,7 +271,7 @@ export default function ExploreBets() {
                         <Badge
                           variant={
                             bet.status === "Open" ? "secondary" :
-                            bet.status === "Active" ? "default" :
+                            bet.status === "Joined" ? "default" :
                             bet.status === "Resolved" ? "destructive" : "outline"
                           }
                         >
@@ -269,17 +294,27 @@ export default function ExploreBets() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm">{bet.takers} takers</span>
+                          <span className="text-sm">Joiner: {bet.joiner.slice(0, 6)}...{bet.joiner.slice(-4)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">Creator: {bet.creator.slice(0, 6)}...{bet.creator.slice(-4)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">Resolver: {bet.resolver.slice(0, 6)}...{bet.resolver.slice(-4)}</span>
                         </div>
                       </div>
                     </CardContent>
                     <CardFooter>
                       <Button 
                         className="w-full" 
-                        onClick={() => handleTakeBet(bet)}
-                        disabled={!account || bet.creator === account}
+                        onClick={() => handleResolveClick(bet)}
+                        disabled={!account || account.toLowerCase() !== bet.resolver.toLowerCase()}
                       >
-                        {!account ? "Connect Wallet" : bet.creator === account ? "Your Bet" : "Take This Bet"}
+                        {!account ? "Connect Wallet" : 
+                         account.toLowerCase() !== bet.resolver.toLowerCase() ? 
+                         "Not Authorized" : "Resolve Bet"}
                       </Button>
                     </CardFooter>
                   </Card>
@@ -289,6 +324,42 @@ export default function ExploreBets() {
           </div>
         </div>
       </main>
+
+      <Dialog open={showWinnerDialog} onOpenChange={setShowWinnerDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Winner</DialogTitle>
+            <DialogDescription>
+              Choose who won the bet. The winner will receive the bet amount.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <RadioGroup value={selectedWinner} onValueChange={setSelectedWinner}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value={selectedBet?.creator} id="creator" />
+                <Label htmlFor="creator">
+                  Creator ({selectedBet?.creator.slice(0, 6)}...{selectedBet?.creator.slice(-4)})
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value={selectedBet?.joiner} id="joiner" />
+                <Label htmlFor="joiner">
+                  Joiner ({selectedBet?.joiner.slice(0, 6)}...{selectedBet?.joiner.slice(-4)})
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowWinnerDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleResolveBet} disabled={!selectedWinner}>
+              Resolve Bet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t">
         <p className="text-xs text-muted-foreground">© 2025 BetChain. All rights reserved.</p>
         <nav className="sm:ml-auto flex gap-4 sm:gap-6">
