@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null)
   const [lockedAmount, setLockedAmount] = useState("0")
   const [totalWinnings, setTotalWinnings] = useState("0")
+  const [totalLost, setTotalLost] = useState("0")
 
   // Fetch active bets where user is creator or joiner
   useEffect(() => {
@@ -57,6 +58,7 @@ export default function Dashboard() {
         setActiveBets([])
         setLockedAmount("0")
         setTotalWinnings("0")
+        setTotalLost("0")
         setIsLoading(false)
         return
       }
@@ -110,8 +112,18 @@ export default function Dashboard() {
           return sum
         }, BigInt(0))
 
+        // Calculate total lost (sum of stakes for resolved bets where user is not winner)
+        const totalLostAmount = resolvedBets.reduce((sum: bigint, bet: FormattedBet) => {
+          // If user is not the winner, add the stake amount
+          if (bet.winner.toLowerCase() !== account.toLowerCase()) {
+            return sum + bet.stake
+          }
+          return sum
+        }, BigInt(0))
+
         setLockedAmount(ethers.formatEther(totalLocked))
         setTotalWinnings(ethers.formatEther(totalWon))
+        setTotalLost(ethers.formatEther(totalLostAmount))
         setActiveBets(formattedBets)
         setError(null)
       } catch (err: any) {
@@ -161,6 +173,12 @@ export default function Dashboard() {
     }
   }
 
+  // Helper function to determine if user won the bet
+  const didUserWin = (bet: FormattedBet) => {
+    if (bet.status !== "Resolved") return null
+    return bet.winner.toLowerCase() === account?.toLowerCase()
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <main className="flex-1 py-6 md:py-12">
@@ -185,7 +203,7 @@ export default function Dashboard() {
                 <CardDescription>Your current balance and transactions</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-4">
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="text-sm text-muted-foreground">Available Balance</div>
                     <div className="text-2xl font-bold">{account ? `${balance} ETH` : "Not connected"}</div>
@@ -196,7 +214,11 @@ export default function Dashboard() {
                   </div>
                   <div className="bg-muted p-4 rounded-lg">
                     <div className="text-sm text-muted-foreground">Total Winnings</div>
-                    <div className="text-2xl font-bold">{account ? `${totalWinnings} ETH` : "Not connected"}</div>
+                    <div className="text-2xl font-bold text-green-500">{account ? `${totalWinnings} ETH` : "Not connected"}</div>
+                  </div>
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="text-sm text-muted-foreground">Total Lost</div>
+                    <div className="text-2xl font-bold text-destructive">{account ? `${totalLost} ETH` : "Not connected"}</div>
                   </div>
                 </div>
                 {!account && (
@@ -297,53 +319,65 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="grid gap-4">
-                    {getFilteredBets("created").map((bet) => (
-                      <Card key={bet.id.toString()}>
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <CardTitle>{bet.title}</CardTitle>
-                            <Badge
-                              variant={
-                                bet.status === "Open" ? "secondary" :
-                                bet.status === "Joined" ? "default" :
-                                bet.status === "Resolved" ? "destructive" : "outline"
-                              }
-                            >
-                              {bet.status}
-                            </Badge>
-                          </div>
-                          <CardDescription>{bet.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid gap-2">
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">
-                                {bet.amount} {bet.token}
-                              </span>
+                    {getFilteredBets("created").map((bet) => {
+                      const userWon = didUserWin(bet)
+                      return (
+                        <Card key={bet.id.toString()}>
+                          <CardHeader className="pb-2">
+                            <div className="flex justify-between items-start">
+                              <CardTitle>{bet.title}</CardTitle>
+                              <div className="flex gap-2">
+                                <Badge
+                                  variant={
+                                    bet.status === "Open" ? "secondary" :
+                                    bet.status === "Joined" ? "default" :
+                                    bet.status === "Resolved" ? "destructive" : "outline"
+                                  }
+                                >
+                                  {bet.status}
+                                </Badge>
+                                {userWon !== null && (
+                                  <Badge
+                                    variant={userWon ? "success" : "destructive"}
+                                  >
+                                    {userWon ? "Won" : "Lost"}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">Expires: {bet.expiresAt}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">
-                                Joiner: {bet.joiner === ethers.ZeroAddress ? "None" : formatAddress(bet.joiner)}
-                              </span>
-                            </div>
-                            {bet.status === "Resolved" && (
+                            <CardDescription>{bet.description}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid gap-2">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">
+                                  {bet.amount} {bet.token}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">Expires: {bet.expiresAt}</span>
+                              </div>
                               <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm">
-                                  Winner: {formatAddress(bet.winner)}
+                                  Joiner: {bet.joiner === ethers.ZeroAddress ? "None" : formatAddress(bet.joiner)}
                                 </span>
                               </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                              {bet.status === "Resolved" && (
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">
+                                    Winner: {formatAddress(bet.winner)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 )}
               </TabsContent>
@@ -363,53 +397,65 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="grid gap-4">
-                    {getFilteredBets("joined").map((bet) => (
-                      <Card key={bet.id.toString()}>
-                        <CardHeader className="pb-2">
-                          <div className="flex justify-between items-start">
-                            <CardTitle>{bet.title}</CardTitle>
-                            <Badge
-                              variant={
-                                bet.status === "Open" ? "secondary" :
-                                bet.status === "Joined" ? "default" :
-                                bet.status === "Resolved" ? "destructive" : "outline"
-                              }
-                            >
-                              {bet.status}
-                            </Badge>
-                          </div>
-                          <CardDescription>{bet.description}</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="grid gap-2">
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">
-                                {bet.amount} {bet.token}
-                              </span>
+                    {getFilteredBets("joined").map((bet) => {
+                      const userWon = didUserWin(bet)
+                      return (
+                        <Card key={bet.id.toString()}>
+                          <CardHeader className="pb-2">
+                            <div className="flex justify-between items-start">
+                              <CardTitle>{bet.title}</CardTitle>
+                              <div className="flex gap-2">
+                                <Badge
+                                  variant={
+                                    bet.status === "Open" ? "secondary" :
+                                    bet.status === "Joined" ? "default" :
+                                    bet.status === "Resolved" ? "destructive" : "outline"
+                                  }
+                                >
+                                  {bet.status}
+                                </Badge>
+                                {userWon !== null && (
+                                  <Badge
+                                    variant={userWon ? "success" : "destructive"}
+                                  >
+                                    {userWon ? "Won" : "Lost"}
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">Expires: {bet.expiresAt}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm">
-                                Creator: {formatAddress(bet.creator)}
-                              </span>
-                            </div>
-                            {bet.status === "Resolved" && (
+                            <CardDescription>{bet.description}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid gap-2">
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">
+                                  {bet.amount} {bet.token}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">Expires: {bet.expiresAt}</span>
+                              </div>
                               <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-muted-foreground" />
                                 <span className="text-sm">
-                                  Winner: {formatAddress(bet.winner)}
+                                  Creator: {formatAddress(bet.creator)}
                                 </span>
                               </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                              {bet.status === "Resolved" && (
+                                <div className="flex items-center gap-2">
+                                  <Users className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm">
+                                    Winner: {formatAddress(bet.winner)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )
+                    })}
                   </div>
                 )}
               </TabsContent>
@@ -477,7 +523,7 @@ export default function Dashboard() {
         </div>
       </main>
       <footer className="flex flex-col gap-2 sm:flex-row py-6 w-full shrink-0 items-center px-4 md:px-6 border-t">
-        <p className="text-xs text-muted-foreground">© 2025 BetChain. All rights reserved.</p>
+        <p className="text-xs text-muted-foreground">© 2025 WagerBet. All rights reserved.</p>
         <nav className="sm:ml-auto flex gap-4 sm:gap-6">
           <Link className="text-xs hover:underline underline-offset-4" href="#">
             Terms of Service
