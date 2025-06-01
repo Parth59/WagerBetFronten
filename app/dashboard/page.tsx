@@ -114,9 +114,12 @@ export default function Dashboard() {
 
         // Calculate total lost (sum of stakes for resolved bets where user is not winner)
         const totalLostAmount = resolvedBets.reduce((sum: bigint, bet: FormattedBet) => {
-          // If user is not the winner, add the stake amount
-          if (bet.winner.toLowerCase() !== account.toLowerCase()) {
-            return sum + bet.stake
+          // Only count losses for bets where user is creator or joiner
+          if (bet.role === "Creator" || bet.role === "Joiner") {
+            // If user is not the winner, add the stake amount
+            if (bet.winner.toLowerCase() !== account.toLowerCase()) {
+              return sum + bet.stake
+            }
           }
           return sum
         }, BigInt(0))
