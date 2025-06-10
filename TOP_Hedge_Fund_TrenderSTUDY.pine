@@ -1,0 +1,117 @@
+//@version=5
+indicator("Hedge Fund Trender Study", overlay=true)
+
+// Inputs
+displayTrailStop = input.bool(true, "Display Trail Stop")
+displayBreakOutLines = input.bool(true, "Display Breakout Lines")
+alertsOn = input.bool(true, "Enable Alerts")
+dotSpace = input.float(0.25, "Dot Space")
+entryDotSize = input.string("large", "Entry Dot Size", options=["tiny", "small", "normal", "large", "huge", "xlarge"])
+trailDotSize = input.string("small", "Trail Dot Size", options=["tiny", "small", "normal", "large", "huge", "xlarge"])
+
+// Convert input strings to constant strings for plotshape
+getEntrySize() =>
+    switch entryDotSize
+        "tiny" => "tiny"
+        "small" => "small"
+        "normal" => "normal"
+        "large" => "large"
+        "huge" => "huge"
+        "xlarge" => "xlarge"
+        => "normal"
+
+getTrailSize() =>
+    switch trailDotSize
+        "tiny" => "tiny"
+        "small" => "small"
+        "normal" => "normal"
+        "large" => "large"
+        "huge" => "huge"
+        "xlarge" => "xlarge"
+        => "normal"
+
+// Constants
+period = 9
+buyEntry = 55
+sellEntry = 55
+buyExit = 20
+sellExit = 20
+
+// Variables
+var float lastBuyTrailStop = na
+var float lastSellTrailStop = na
+var float vPosition = 0.0
+var float buyTrailStart = na
+var float buyTrail = na
+var float buyDotGap = na
+var float sellTrailStart = na
+var float sellTrail = na
+var float sellDotGap = na
+var float switchSide = 0.0
+var float buyExitLevel = na
+var float sellExitLevel = na
+
+// Calculations
+varDot = ta.atr(21) * dotSpace
+
+hh = ta.highest(math.max(open, close), period)
+proRange = hh - ta.lowest(math.min(open, close), period)
+vProR = proRange != 0 ? 100 - ((hh - close) / proRange) * 100 : 0
+
+// Position calculation
+vPosition := vProR < 30 and vProR[1] > 30 and vPosition[1] > -1 ? -1 : vProR > 70 and vProR[1] < 70 and vPosition[1] < 1 ? 1 : vPosition[1]
+
+buySignal = vPosition == 1 and vPosition[1] < 1
+sellSignal = vPosition == -1 and vPosition[1] > -1
+buyTrend = (vPosition == 1 and vPosition[1] == 1) or ((vPosition == -1 and vPosition[1] > -1) and vPosition[1] != 0)
+sellTrend = (vPosition == -1 and vPosition[1] == -1) or ((vPosition == 1 and vPosition[1] < 1) and vPosition[1] != 0)
+
+// Plot signals
+plotshape(sellSignal ? high + varDot : na, "Sell", shape.circle, location.absolute, color.red, size=getEntrySize())
+plotshape(buySignal ? low - varDot : na, "Buy", shape.circle, location.absolute, color.blue, size=getEntrySize())
+
+// Trail calculations
+buyTrailStart := buySignal ? ta.lowest(low, 4) : buyTrailStart[1]
+buyTrail := buySignal ? buyTrailStart : (buyTrend ? lastBuyTrailStop[1] : na)
+buyDotGap := buySignal ? (close - ta.lowest(low, 4)) * 1 : buyDotGap[1]
+
+buyIncrement = buyTrend and high[1] > ta.highest(high, 5)[2] ? (close[1] - ta.highest(high, 3)[2]) : 0
+buyGap = buyTrend and low - buyTrail > ta.atr(10) * 2 ? ((low - buyTrail) - ta.atr(10) * 2) : (buyTrend and (low - lastBuyTrailStop[1]) - buyDotGap > 0 ? (low - lastBuyTrailStop[1]) - buyDotGap : 0)
+
+sellTrailStart := sellSignal ? ta.highest(high, 4) : sellTrailStart[1]
+sellTrail := sellSignal ? sellTrailStart : (sellTrend ? lastSellTrailStop[1] : na)
+sellDotGap := sellSignal ? (close - ta.highest(high, 4)) * 1.0 : sellDotGap[1]
+
+sellIncrement = sellTrend and low[1] < ta.lowest(low, 5)[2] ? (close[1] - ta.lowest(low, 3)[2]) : 0
+sellGap = sellTrend and sellTrail - high > ta.atr(10) * 2 ? ta.atr(10) * 2 - (sellTrail - high) : (sellTrend and (high - lastSellTrailStop[1]) - sellDotGap < 0 ? ((high - lastSellTrailStop[1]) - sellDotGap) : 0)
+
+// Plot trail stop
+trailStop = buySignal ? buyTrail : (buyTrend ? math.max(lastBuyTrailStop[1], lastBuyTrailStop[1] + math.max(buyIncrement, buyGap)) : (sellSignal ? sellTrail : (sellTrend ? math.min(lastSellTrailStop[1], lastSellTrailStop[1] + math.min(sellIncrement, sellGap)) : na)))
+
+plot(trailStop, "Trail Stop", color=color.new(buySignal or buyTrend ? color.green : color.magenta, 0), style=plot.style_circles, linewidth=getTrailSize())
+
+lastBuyTrailStop := buySignal ? buyTrail : (buyTrend ? trailStop : na)
+lastSellTrailStop := sellSignal ? sellTrail : (sellTrend ? trailStop : na)
+
+// Breakout levels
+buyLevel = ta.highest(high, buyEntry)[1]
+sellLevel = ta.lowest(low, sellEntry)[1]
+
+switchSide := high > buyLevel and switchSide[1] < 1 ? 1 : (low < sellLevel and switchSide[1] > -1 ? -1 : switchSide[1])
+
+condition1 = switchSide == 1 and switchSide[1] == 1
+condition2 = switchSide == -1 and switchSide[1] == -1
+
+buyExitLevel := condition1 ? math.max(buyExitLevel[1], ta.lowest(low, buyExit)[1]) : (condition2 ? sellLevel : buyExitLevel[1])
+
+sellExitLevel := condition1 ? buyLevel : (condition2 ? math.min(sellExitLevel[1], ta.highest(high, sellExit)[1]) : sellExitLevel[1])
+
+// Plot breakout lines
+plot(switchSide != 0 and displayBreakOutLines ? buyLevel : na, "Buy Level", color=color.new(switchSide == 1 ? color.green : color.red, 0), style=plot.style_circles)
+plot(switchSide != 0 and displayBreakOutLines ? buyExitLevel : na, "Buy Exit", color=color.red, style=plot.style_circles)
+plot(switchSide != 0 and displayBreakOutLines ? sellLevel : na, "Sell Level", color=color.new(switchSide == 1 ? color.green : color.red, 0), style=plot.style_circles)
+plot(switchSide != 0 and displayBreakOutLines ? sellExitLevel : na, "Sell Exit", color=color.green, style=plot.style_circles)
+
+// Alerts
+alertcondition(buySignal and alertsOn, "Hedge Fund Trender Buy Alert", "Buy Signal")
+alertcondition(sellSignal and alertsOn, "Hedge Fund Trender Sell Alert", "Sell Signal") 

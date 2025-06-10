@@ -11,7 +11,7 @@ import { Header } from "@/components/header"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "BetChain",
+  title: "WagerBet",
   description: "Decentralized betting platform",
 }
 
